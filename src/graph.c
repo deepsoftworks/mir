@@ -22,6 +22,30 @@ static const char *mir_op_name(MirOpType op) {
     }
 }
 
+static MirStatus mir_graph_grow_tensors(MirGraph *graph) {
+    size_t next = graph->tensor_capacity == 0 ? 16 : graph->tensor_capacity * 2;
+    MirTensor *grown = (MirTensor *)realloc(graph->tensors, next * sizeof(MirTensor));
+    if (!grown) {
+        return MIR_ERR_OUT_OF_MEMORY;
+    }
+    memset(grown + graph->tensor_capacity, 0, (next - graph->tensor_capacity) * sizeof(MirTensor));
+    graph->tensors = grown;
+    graph->tensor_capacity = next;
+    return MIR_OK;
+}
+
+static MirStatus mir_graph_grow_nodes(MirGraph *graph) {
+    size_t next = graph->node_capacity == 0 ? 16 : graph->node_capacity * 2;
+    MirNode *grown = (MirNode *)realloc(graph->nodes, next * sizeof(MirNode));
+    if (!grown) {
+        return MIR_ERR_OUT_OF_MEMORY;
+    }
+    memset(grown + graph->node_capacity, 0, (next - graph->node_capacity) * sizeof(MirNode));
+    graph->nodes = grown;
+    graph->node_capacity = next;
+    return MIR_OK;
+}
+
 MirStatus mir_graph_init(MirGraph *graph, size_t tensor_capacity, size_t node_capacity) {
     if (!graph || tensor_capacity == 0 || node_capacity == 0) {
         return MIR_ERR_INVALID_ARGUMENT;
@@ -61,7 +85,10 @@ MirStatus mir_graph_add_tensor(MirGraph *graph, const MirTensor *tensor, size_t 
         return MIR_ERR_INVALID_ARGUMENT;
     }
     if (graph->tensor_count >= graph->tensor_capacity) {
-        return MIR_ERR_OUT_OF_MEMORY;
+        MirStatus status = mir_graph_grow_tensors(graph);
+        if (status != MIR_OK) {
+            return status;
+        }
     }
 
     size_t id = graph->tensor_count++;
@@ -77,7 +104,10 @@ MirStatus mir_graph_add_empty_tensor(MirGraph *graph, size_t *out_id) {
         return MIR_ERR_INVALID_ARGUMENT;
     }
     if (graph->tensor_count >= graph->tensor_capacity) {
-        return MIR_ERR_OUT_OF_MEMORY;
+        MirStatus status = mir_graph_grow_tensors(graph);
+        if (status != MIR_OK) {
+            return status;
+        }
     }
 
     size_t id = graph->tensor_count++;
@@ -103,6 +133,20 @@ const MirTensor *mir_graph_tensor_const(const MirGraph *graph, size_t id) {
     return &graph->tensors[id];
 }
 
+MirStatus mir_graph_find_tensor(const MirGraph *graph, const char *name, size_t *out_id) {
+    if (!graph || !name || !out_id) {
+        return MIR_ERR_INVALID_ARGUMENT;
+    }
+    for (size_t i = 0; i < graph->tensor_count; ++i) {
+        const char *tensor_name = graph->tensors[i].name;
+        if (tensor_name && strcmp(tensor_name, name) == 0) {
+            *out_id = i;
+            return MIR_OK;
+        }
+    }
+    return MIR_ERR_RUNTIME;
+}
+
 MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_id) {
     if (!graph || !node) {
         return MIR_ERR_INVALID_ARGUMENT;
@@ -111,7 +155,10 @@ MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_i
         return MIR_ERR_INVALID_ARGUMENT;
     }
     if (graph->node_count >= graph->node_capacity) {
-        return MIR_ERR_OUT_OF_MEMORY;
+        MirStatus status = mir_graph_grow_nodes(graph);
+        if (status != MIR_OK) {
+            return status;
+        }
     }
 
     for (uint32_t i = 0; i < node->input_count; ++i) {
@@ -141,7 +188,11 @@ void mir_graph_dump(const MirGraph *graph, FILE *out) {
     fprintf(out, "graph(tensors=%zu, nodes=%zu)\n", graph->tensor_count, graph->node_count);
     for (size_t i = 0; i < graph->tensor_count; ++i) {
         const MirTensor *t = &graph->tensors[i];
-        fprintf(out, "  t%zu: shape=[", i);
+        fprintf(out, "  t%zu", i);
+        if (t->name) {
+            fprintf(out, "(%s)", t->name);
+        }
+        fprintf(out, ": shape=[");
         for (uint32_t d = 0; d < t->shape.rank; ++d) {
             fprintf(out, "%lld%s", (long long)t->shape.dims[d], d + 1 < t->shape.rank ? "," : "");
         }

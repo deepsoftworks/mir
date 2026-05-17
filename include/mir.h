@@ -33,6 +33,8 @@ typedef struct {
     size_t elem_count;
     size_t bytes;
     float *data;
+    char *name;
+    bool owns_name;
     bool owns_data;
 } MirTensor;
 
@@ -117,6 +119,7 @@ MirStatus mir_graph_add_tensor(MirGraph *graph, const MirTensor *tensor, size_t 
 MirStatus mir_graph_add_empty_tensor(MirGraph *graph, size_t *out_id);
 MirTensor *mir_graph_tensor(MirGraph *graph, size_t id);
 const MirTensor *mir_graph_tensor_const(const MirGraph *graph, size_t id);
+MirStatus mir_graph_find_tensor(const MirGraph *graph, const char *name, size_t *out_id);
 MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_id);
 void mir_graph_dump(const MirGraph *graph, FILE *out);
 
@@ -143,5 +146,8 @@ MirStatus mir_execute_graph(
     const MirExecutionOptions *options,
     MirProfileBuffer *profile
 );
+
+MirStatus mir_onnx_load_buffer(const void *data, size_t size, MirGraph *graph);
+MirStatus mir_onnx_load_file(const char *path, MirGraph *graph);
 
 #endif

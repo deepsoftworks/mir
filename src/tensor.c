@@ -190,6 +190,9 @@ MirStatus mir_tensor_view(MirTensor *tensor, const MirTensor *source, MirShape s
     if (tensor->owns_data && tensor->data) {
         free(tensor->data);
     }
+    if (tensor->owns_name && tensor->name) {
+        free(tensor->name);
+    }
 
     memset(tensor, 0, sizeof(*tensor));
     tensor->dtype = source->dtype;
@@ -209,6 +212,9 @@ void mir_tensor_free(MirTensor *tensor) {
     if (tensor->owns_data && tensor->data) {
         free(tensor->data);
     }
+    if (tensor->owns_name && tensor->name) {
+        free(tensor->name);
+    }
     memset(tensor, 0, sizeof(*tensor));
 }
 
@@ -217,7 +223,11 @@ void mir_tensor_dump(const MirTensor *tensor, FILE *out, size_t max_elements) {
         return;
     }
 
-    fprintf(out, "tensor(shape=[");
+    fprintf(out, "tensor(");
+    if (tensor->name) {
+        fprintf(out, "name=%s, ", tensor->name);
+    }
+    fprintf(out, "shape=[");
     for (uint32_t i = 0; i < tensor->shape.rank; ++i) {
         fprintf(out, "%lld%s", (long long)tensor->shape.dims[i], i + 1 < tensor->shape.rank ? "," : "");
     }

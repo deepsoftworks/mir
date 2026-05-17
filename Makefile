@@ -8,6 +8,7 @@ SRC := \
 	src/graph.c \
 	src/runtime.c \
 	src/allocator.c \
+	src/onnx.c \
 	src/ops/matmul.c \
 	src/ops/add.c \
 	src/ops/relu.c \
@@ -16,7 +17,8 @@ SRC := \
 	src/ops/transpose.c
 OBJ := $(SRC:%.c=$(BUILD_DIR)/%.o)
 
-TEST_BIN := $(BUILD_DIR)/test_ops
+TEST_OPS_BIN := $(BUILD_DIR)/test_ops
+TEST_ONNX_BIN := $(BUILD_DIR)/test_onnx
 LIB := $(BUILD_DIR)/libmir.a
 
 .PHONY: all clean test
@@ -41,11 +43,15 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR) $(BUILD_DIR)/src $(BUILD_DIR)/src/ops
 $(LIB): $(OBJ)
 	ar rcs $@ $(OBJ)
 
-$(TEST_BIN): tests/test_ops.c $(OBJ) | $(BUILD_DIR)/tests
+$(TEST_OPS_BIN): tests/test_ops.c $(OBJ) | $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) -Iinclude $^ -o $@ $(LDFLAGS) -lm
 
-test: $(TEST_BIN)
-	./$(TEST_BIN)
+$(TEST_ONNX_BIN): tests/test_onnx.c $(OBJ) | $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) -Iinclude $^ -o $@ $(LDFLAGS) -lm
+
+test: $(TEST_OPS_BIN) $(TEST_ONNX_BIN)
+	./$(TEST_OPS_BIN)
+	./$(TEST_ONNX_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)
