@@ -124,6 +124,8 @@ const MirTensor *mir_graph_tensor_const(const MirGraph *graph, size_t id);
 MirStatus mir_graph_find_tensor(const MirGraph *graph, const char *name, size_t *out_id);
 MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_id);
 void mir_graph_set_arena(MirGraph *graph, MirArena *arena);
+size_t mir_graph_plan_size(const MirGraph *graph);
+MirStatus mir_graph_plan(MirGraph *graph, MirArena *arena);
 void mir_graph_dump(const MirGraph *graph, FILE *out);
 
 MirStatus mir_arena_init(MirArena *arena, size_t capacity);

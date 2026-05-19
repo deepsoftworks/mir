@@ -8,6 +8,7 @@ SRC := \
 	src/graph.c \
 	src/runtime.c \
 	src/allocator.c \
+	src/planner.c \
 	src/onnx.c \
 	src/ops/matmul.c \
 	src/ops/add.c \

@@ -300,6 +300,116 @@ static void test_runtime_path(TestStats *stats) {
     mir_graph_free(&graph);
 }
 
+static void test_planned_runtime(TestStats *stats) {
+    MirGraph graph;
+    MirStatus status = mir_graph_init(&graph, 12, 8);
+    expect(status == MIR_OK, "planned graph init", stats);
+    if (status != MIR_OK) {
+        return;
+    }
+
+    int64_t in_dims[2] = {1, 3};
+    int64_t w_dims[2] = {3, 2};
+    int64_t b_dims[2] = {1, 2};
+    MirTensor input = make_tensor_or_die(in_dims, 2);
+    MirTensor weight = make_tensor_or_die(w_dims, 2);
+    MirTensor bias = make_tensor_or_die(b_dims, 2);
+
+    input.data[0] = 1.0f;
+    input.data[1] = 2.0f;
+    input.data[2] = -1.0f;
+    weight.data[0] = 0.5f;
+    weight.data[1] = 1.0f;
+    weight.data[2] = -0.5f;
+    weight.data[3] = 0.25f;
+    weight.data[4] = 1.0f;
+    weight.data[5] = -1.0f;
+    bias.data[0] = 0.1f;
+    bias.data[1] = -0.2f;
+
+    size_t t_in, t_w, t_b, t_mm, t_add, t_relu, t_sm, t_rs, t_out;
+    mir_graph_add_tensor(&graph, &input, &t_in);
+    mir_graph_add_tensor(&graph, &weight, &t_w);
+    mir_graph_add_tensor(&graph, &bias, &t_b);
+    mir_graph_add_empty_tensor(&graph, &t_mm);
+    mir_graph_add_empty_tensor(&graph, &t_add);
+    mir_graph_add_empty_tensor(&graph, &t_relu);
+    mir_graph_add_empty_tensor(&graph, &t_sm);
+    mir_graph_add_empty_tensor(&graph, &t_rs);
+    mir_graph_add_empty_tensor(&graph, &t_out);
+
+    MirNode node = {0};
+    node.op = MIR_OP_MATMUL;
+    node.input_count = 2;
+    node.output_count = 1;
+    node.inputs[0] = (uint32_t)t_in;
+    node.inputs[1] = (uint32_t)t_w;
+    node.outputs[0] = (uint32_t)t_mm;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    node.op = MIR_OP_ADD;
+    node.inputs[0] = (uint32_t)t_mm;
+    node.inputs[1] = (uint32_t)t_b;
+    node.outputs[0] = (uint32_t)t_add;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    node.op = MIR_OP_RELU;
+    node.input_count = 1;
+    node.inputs[0] = (uint32_t)t_add;
+    node.outputs[0] = (uint32_t)t_relu;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    node.op = MIR_OP_SOFTMAX;
+    node.attrs.axis = 1;
+    node.inputs[0] = (uint32_t)t_relu;
+    node.outputs[0] = (uint32_t)t_sm;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    int64_t rs_dims[2] = {2, 1};
+    mir_shape_make(rs_dims, 2, &node.attrs.reshape_shape);
+    node.op = MIR_OP_RESHAPE;
+    node.inputs[0] = (uint32_t)t_sm;
+    node.outputs[0] = (uint32_t)t_rs;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    node.op = MIR_OP_TRANSPOSE;
+    node.attrs.perm_rank = 2;
+    node.attrs.perm[0] = 1;
+    node.attrs.perm[1] = 0;
+    node.inputs[0] = (uint32_t)t_rs;
+    node.outputs[0] = (uint32_t)t_out;
+    mir_graph_add_node(&graph, &node, NULL);
+
+    /* plan and allocate */
+    size_t arena_size = mir_graph_plan_size(&graph);
+    expect(arena_size > 0, "planned arena size > 0", stats);
+    /* 6 intermediates, 5 need allocation (reshape is a view), each 8 bytes = 40 total.
+       with lifetime reuse the peak should be less. */
+    expect(arena_size < 5 * 8, "planned arena reuses memory", stats);
+
+    MirArena arena;
+    status = mir_arena_init(&arena, arena_size);
+    expect(status == MIR_OK, "planned arena init", stats);
+
+    status = mir_graph_plan(&graph, &arena);
+    expect(status == MIR_OK, "planned graph plan", stats);
+
+    status = mir_execute_graph(&graph, NULL, NULL);
+    expect(status == MIR_OK, "planned execute", stats);
+
+    MirTensor *output = mir_graph_tensor(&graph, t_out);
+    expect(output != NULL, "planned output exists", stats);
+    if (output) {
+        expect(output->shape.rank == 2 && output->shape.dims[0] == 1 && output->shape.dims[1] == 2,
+               "planned output shape", stats);
+        expect(almost_equal(output->data[0], 0.09112296f, 1e-5f), "planned output value [0]", stats);
+        expect(almost_equal(output->data[1], 0.90887702f, 1e-5f), "planned output value [1]", stats);
+    }
+
+    mir_arena_free(&arena);
+    mir_graph_free(&graph);
+}
+
 int main(void) {
     TestStats stats = {0, 0};
     test_matmul(&stats);
@@ -309,6 +419,7 @@ int main(void) {
     test_reshape(&stats);
     test_transpose(&stats);
     test_runtime_path(&stats);
+    test_planned_runtime(&stats);
 
     printf("passed=%d failed=%d\n", stats.passed, stats.failed);
     return stats.failed == 0 ? 0 : 1;
