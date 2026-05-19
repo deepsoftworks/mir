@@ -113,6 +113,7 @@ MirStatus mir_graph_add_empty_tensor(MirGraph *graph, size_t *out_id) {
     size_t id = graph->tensor_count++;
     memset(&graph->tensors[id], 0, sizeof(MirTensor));
     graph->tensors[id].dtype = MIR_DTYPE_F32;
+    graph->tensors[id].arena = graph->arena;
     if (out_id) {
         *out_id = id;
     }
@@ -178,6 +179,18 @@ MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_i
         *out_id = id;
     }
     return MIR_OK;
+}
+
+void mir_graph_set_arena(MirGraph *graph, MirArena *arena) {
+    if (!graph) {
+        return;
+    }
+    graph->arena = arena;
+    for (size_t i = 0; i < graph->tensor_count; ++i) {
+        if (!graph->tensors[i].data) {
+            graph->tensors[i].arena = arena;
+        }
+    }
 }
 
 void mir_graph_dump(const MirGraph *graph, FILE *out) {

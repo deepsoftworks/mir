@@ -151,19 +151,24 @@ MirStatus mir_tensor_resize(MirTensor *tensor, MirShape shape) {
         return status;
     }
 
-    if (tensor->owns_data) {
-        if (bytes == 0) {
-            return MIR_ERR_INVALID_ARGUMENT;
+    if (bytes == 0) {
+        return MIR_ERR_INVALID_ARGUMENT;
+    }
+
+    if (tensor->arena) {
+        float *block = (float *)mir_arena_alloc(tensor->arena, bytes, 16);
+        if (!block) {
+            return MIR_ERR_OUT_OF_MEMORY;
         }
+        tensor->data = block;
+        tensor->owns_data = false;
+    } else if (tensor->owns_data) {
         float *resized = (float *)realloc(tensor->data, bytes);
         if (!resized) {
             return MIR_ERR_OUT_OF_MEMORY;
         }
         tensor->data = resized;
     } else {
-        if (bytes == 0) {
-            return MIR_ERR_INVALID_ARGUMENT;
-        }
         tensor->data = (float *)calloc(1, bytes);
         if (!tensor->data) {
             return MIR_ERR_OUT_OF_MEMORY;

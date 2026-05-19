@@ -27,6 +27,13 @@ typedef struct {
 } MirShape;
 
 typedef struct {
+    uint8_t *base;
+    size_t capacity;
+    size_t offset;
+    bool owns_memory;
+} MirArena;
+
+typedef struct {
     MirDType dtype;
     MirShape shape;
     int64_t strides[MIR_MAX_DIMS];
@@ -36,6 +43,7 @@ typedef struct {
     char *name;
     bool owns_name;
     bool owns_data;
+    MirArena *arena;
 } MirTensor;
 
 typedef enum {
@@ -71,14 +79,8 @@ typedef struct {
     MirNode *nodes;
     size_t node_count;
     size_t node_capacity;
+    MirArena *arena;
 } MirGraph;
-
-typedef struct {
-    uint8_t *base;
-    size_t capacity;
-    size_t offset;
-    bool owns_memory;
-} MirArena;
 
 typedef void (*MirLogFn)(void *user, const char *message);
 
@@ -121,6 +123,7 @@ MirTensor *mir_graph_tensor(MirGraph *graph, size_t id);
 const MirTensor *mir_graph_tensor_const(const MirGraph *graph, size_t id);
 MirStatus mir_graph_find_tensor(const MirGraph *graph, const char *name, size_t *out_id);
 MirStatus mir_graph_add_node(MirGraph *graph, const MirNode *node, size_t *out_id);
+void mir_graph_set_arena(MirGraph *graph, MirArena *arena);
 void mir_graph_dump(const MirGraph *graph, FILE *out);
 
 MirStatus mir_arena_init(MirArena *arena, size_t capacity);
